@@ -9,13 +9,14 @@ row in category_stats -- that number (near 0%) is itself informative.
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
 from src.config import EXCLUDE_STABLECOINS_FROM_RETURNS, MILESTONES
 
 STABLECOIN_CATEGORY = "Stablecoin"
+BENCHMARK_COIN_ID = "bitcoin"
 SURVIVAL_THRESHOLDS = (90, 180, 365)
 DURATION_BUCKETS = [0, 30, 60, 90, 180, 365, float("inf")]
 DURATION_BUCKET_LABELS = ["0-30", "30-60", "60-90", "90-180", "180-365", "365+"]
@@ -270,6 +271,138 @@ def _kaplan_meier_curves(tenures_view: pd.DataFrame) -> dict[str, list[dict]]:
     return curves
 
 
+def _price_lookup(conn: sqlite3.Connection, coin_id: str) -> dict[str, float]:
+    """date_str -> price for one coin, from snapshots first then price_cache.
+    Uses only data already on disk -- no API calls."""
+    lookup: dict[str, float] = {}
+    for row in conn.execute(
+        "SELECT snapshot_date AS d, price_usd AS p FROM snapshots WHERE coin_id = ? AND price_usd IS NOT NULL",
+        (coin_id,),
+    ):
+        lookup[row["d"]] = row["p"]
+    for row in conn.execute(
+        "SELECT price_date AS d, price_usd AS p FROM price_cache WHERE coin_id = ? AND price_usd IS NOT NULL",
+        (coin_id,),
+    ):
+        lookup.setdefault(row["d"], row["p"])
+    return lookup
+
+
+def _btc_benchmark(tenures_view: pd.DataFrame, returns: pd.DataFrame, conn: sqlite3.Connection) -> dict:
+    """Compares 'buy every new top-50 entrant and hold' against 'buy BTC on that same
+    date and hold the same number of days' -- identical entry dates and windows, only
+    the asset differs. Reuses cached prices only; adds no new API calls.
+
+    Always returns one entry per milestone (n=0 with null values when there's nothing
+    to compare), matching the shape of _global_blended_returns / _category_returns_stats
+    rather than short-circuiting to `{}` on empty input.
+    """
+    btc_prices = _price_lookup(conn, BENCHMARK_COIN_ID) if not tenures_view.empty else {}
+
+    eligible = tenures_view[tenures_view["coin_id"] != BENCHMARK_COIN_ID]
+    if EXCLUDE_STABLECOINS_FROM_RETURNS:
+        eligible = eligible[eligible["category"] != STABLECOIN_CATEGORY]
+    entry_date_by_tenure = eligible.set_index("tenure_id")["entry_date"] if not eligible.empty else pd.Series(dtype=object)
+
+    out = {}
+    for m in MILESTONES:
+        strat_vals: list[float] = []
+        btc_vals: list[float] = []
+        merged = (
+            returns[(returns["milestone_day"] == m) & (returns["tenure_id"].isin(eligible["tenure_id"]))]
+            if not eligible.empty
+            else returns.iloc[0:0]
+        )
+        for _, row in merged.iterrows():
+            if pd.isna(row["return_pct"]):
+                continue
+            entry_date = entry_date_by_tenure.get(row["tenure_id"])
+            if entry_date is None:
+                continue
+            target_date = (date.fromisoformat(entry_date) + timedelta(days=int(m))).isoformat()
+            btc_entry = btc_prices.get(entry_date)
+            btc_target = btc_prices.get(target_date)
+            if btc_entry is None or btc_target is None:
+                continue
+            strat_vals.append(float(row["return_pct"]))
+            btc_vals.append(((btc_target - btc_entry) / btc_entry) * 100)
+
+        if not strat_vals:
+            out[str(m)] = {"avg_strategy_return": None, "avg_btc_return": None, "alpha": None, "n": 0}
+            continue
+        avg_strat = sum(strat_vals) / len(strat_vals)
+        avg_btc = sum(btc_vals) / len(btc_vals)
+        out[str(m)] = {
+            "avg_strategy_return": round(avg_strat, 2),
+            "avg_btc_return": round(avg_btc, 2),
+            "alpha": round(avg_strat - avg_btc, 2),
+            "n": len(strat_vals),
+        }
+    return out
+
+
+def _hall_of_fame(conn: sqlite3.Connection, top_n: int = 5) -> dict:
+    """The single best and worst (tenure, milestone) returns ever recorded -- real
+    individual outcomes, not category averages that smooth them out."""
+    rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT c.coin_id, c.symbol, c.name, c.category,
+                   t.entry_date, r.milestone_day, r.return_pct
+            FROM returns r
+            JOIN tenures t ON t.tenure_id = r.tenure_id
+            JOIN coins c ON c.coin_id = t.coin_id
+            WHERE r.return_pct IS NOT NULL
+            """
+        )
+    ]
+    if not rows:
+        return {"winners": [], "losers": []}
+
+    rows.sort(key=lambda e: e["return_pct"], reverse=True)
+    winners = rows[:top_n]
+    losers = list(reversed(rows[-top_n:]))
+
+    def _fmt(e: dict) -> dict:
+        return {
+            "coin_id": e["coin_id"],
+            "symbol": e["symbol"],
+            "name": e["name"],
+            "category": e["category"],
+            "entry_date": e["entry_date"],
+            "milestone_day": e["milestone_day"],
+            "return_pct": round(e["return_pct"], 2),
+        }
+
+    return {"winners": [_fmt(e) for e in winners], "losers": [_fmt(e) for e in losers]}
+
+
+def _coin_series(conn: sqlite3.Connection, frames: dict, tenures_view: pd.DataFrame) -> dict:
+    """Per-coin price history and full tenure list, for the dashboard's coin detail
+    drill-down. Price history is whatever we already have cached (snapshots +
+    price_cache) -- no new API calls."""
+    out: dict[str, dict] = {}
+    for coin_id in frames["coins"]["coin_id"]:
+        series = [{"date": d, "price": p} for d, p in sorted(_price_lookup(conn, coin_id).items())]
+
+        tenure_list = []
+        for _, t in tenures_view[tenures_view["coin_id"] == coin_id].iterrows():
+            tenure_list.append(
+                {
+                    "tenure_id": int(t["tenure_id"]),
+                    "entry_date": t["entry_date"],
+                    "entry_price": t["entry_price"],
+                    "exit_date": t["exit_date"] if pd.notna(t["exit_date"]) else None,
+                    "exit_price": t["exit_price"] if pd.notna(t["exit_price"]) else None,
+                    "duration_days": int(t["duration_days"]),
+                    "is_active": bool(t["is_active"]),
+                }
+            )
+        out[coin_id] = {"price_series": series, "tenures": tenure_list}
+    return out
+
+
 def build_analysis(conn: sqlite3.Connection) -> dict:
     """Builds the full analysis dict written to output/analysis.json."""
     frames = _load_frames(conn)
@@ -305,7 +438,10 @@ def build_analysis(conn: sqlite3.Connection) -> dict:
             "duration_histogram": _duration_histogram(tenures_view),
             "monthly_churn": _monthly_churn(tenures_view),
             "entry_rank_survival_correlation": _entry_rank_survival_correlation(tenures_view),
+            "benchmark_vs_btc": _btc_benchmark(tenures_view, frames["returns"], conn),
         },
         "survival_curves": _kaplan_meier_curves(tenures_view),
         "timeline": _timeline(tenures_view),
+        "hall_of_fame": _hall_of_fame(conn),
+        "coin_series": _coin_series(conn, frames, tenures_view),
     }

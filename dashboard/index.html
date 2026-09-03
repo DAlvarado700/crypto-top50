@@ -46,6 +46,18 @@
           <div class="note">Stablecoins excluded from the global average (return ~0% by design). n = tenures with a computed return.</div>
         </div>
       </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>Buying every new entrant vs. just holding BTC</h2>
+          <div id="benchmark-panel"></div>
+          <div class="note">Same entry dates, same hold windows -- only the asset differs. Excludes BTC's own tenure and (by default) stablecoins.</div>
+        </div>
+        <div class="card">
+          <h2>Hall of Fame / Hall of Shame</h2>
+          <div id="hall-of-fame"></div>
+          <div class="note">Single best/worst (coin, milestone) outcomes ever recorded -- real individual results, not category averages.</div>
+        </div>
+      </div>
     </section>
 
     <!-- COMPOSITION -->
@@ -101,6 +113,7 @@
     <section class="view" id="view-coins">
       <div class="card">
         <h2>All tracked coins</h2>
+        <div class="note" style="margin:0 0 10px">Click a row for price history and full tenure detail.</div>
         <div class="filters">
           <input type="text" id="coin-search" placeholder="Search by symbol or name...">
           <select id="coin-category-filter"><option value="">All categories</option></select>
@@ -142,6 +155,25 @@
     data: CoinGecko
   </footer>
 
+</div>
+
+<div id="coin-modal-backdrop" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <span id="coin-modal-title">-</span>
+        <span id="coin-modal-category" class="badge" style="margin-left:8px"></span>
+      </div>
+      <button id="coin-modal-close" class="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="chart-box" style="height:220px"><canvas id="coin-modal-chart"></canvas></div>
+      <h3>Tenure history</h3>
+      <div class="table-wrap">
+        <table id="coin-modal-tenures"></table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="vendor/chart.umd.min.js"></script>

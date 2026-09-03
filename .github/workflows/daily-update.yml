@@ -1,0 +1,57 @@
+name: Daily update
+
+# Runs the daily pipeline (snapshot + returns + analyze), commits the updated
+# data/tracker.db and dashboard/data.js back to the repo, and redeploys the
+# dashboard to GitHub Pages. Runs on a schedule and can also be triggered
+# manually from the Actions tab (useful for the very first deploy).
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # 08:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run daily pipeline
+        env:
+          CG_API_KEY: ${{ secrets.CG_API_KEY }}
+        run: python main.py run
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/tracker.db dashboard/data.js
+          git diff --staged --quiet || git commit -m "Daily update: $(date -u +'%Y-%m-%d')"
+          git push
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

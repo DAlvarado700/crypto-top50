@@ -164,6 +164,71 @@
     }
   }
 
+  // ---- benchmark vs BTC ----
+
+  function renderBenchmark() {
+    const target = document.getElementById("benchmark-panel");
+    target.innerHTML = "";
+    const bench = (DATA.global && DATA.global.benchmark_vs_btc) || {};
+    const d100 = bench["100"];
+
+    if (!d100 || d100.alpha === null) {
+      target.appendChild(el("div", { class: "empty-state" }, "not enough overlapping price data yet"));
+      return;
+    }
+
+    target.appendChild(el("div", { class: "benchmark-hero" }, [
+      el("span", { class: "alpha " + pctClass(d100.alpha) }, fmtPct(d100.alpha)),
+      el("span", { class: "alpha-label" }, `alpha at d100 vs. holding BTC (n=${d100.n})`),
+    ]));
+
+    target.appendChild(el("div", { class: "benchmark-row head" }, [
+      el("div", {}, "Day"), el("div", { class: "num" }, "Entrants"), el("div", { class: "num" }, "BTC"),
+      el("div", { class: "num" }, "Alpha"), el("div", { class: "num" }, "n"),
+    ]));
+    for (const m of MILESTONES) {
+      const b = bench[m];
+      if (!b || b.alpha === null) continue;
+      target.appendChild(el("div", { class: "benchmark-row" }, [
+        el("div", {}, `d${m}`),
+        el("div", { class: "num " + pctClass(b.avg_strategy_return) }, fmtPct(b.avg_strategy_return)),
+        el("div", { class: "num " + pctClass(b.avg_btc_return) }, fmtPct(b.avg_btc_return)),
+        el("div", { class: "num " + pctClass(b.alpha) }, fmtPct(b.alpha)),
+        el("div", { class: "num muted-text" }, String(b.n)),
+      ]));
+    }
+  }
+
+  // ---- hall of fame / hall of shame ----
+
+  function hofRow(entry) {
+    const color = categoryColor(entry.category);
+    return el("div", { class: "hof-row" }, [
+      el("div", {}, [el("span", { class: "cat-dot", style: `background:${color}` }), entry.symbol]),
+      el("div", { class: "muted-text" }, entry.category),
+      el("div", { class: "muted-text" }, `d${entry.milestone_day}`),
+      el("div", { class: "num " + pctClass(entry.return_pct) }, fmtPct(entry.return_pct)),
+    ]);
+  }
+
+  function renderHallOfFame() {
+    const target = document.getElementById("hall-of-fame");
+    target.innerHTML = "";
+    const hof = DATA.hall_of_fame || { winners: [], losers: [] };
+    if (hof.winners.length === 0) {
+      target.appendChild(el("div", { class: "empty-state" }, "no data"));
+      return;
+    }
+    target.appendChild(el("div", { class: "hof-list" }, [
+      el("h4", {}, "Winners"),
+      ...hof.winners.map(hofRow),
+    ]));
+    target.appendChild(el("div", { class: "hof-list" }, [
+      el("h4", {}, "Losers"),
+      ...hof.losers.map(hofRow),
+    ]));
+  }
+
   // ---- composition view: coins grouped by category ----
 
   function renderCompByCategory() {
@@ -435,6 +500,7 @@
       for (const key of ["r20", "r50", "r100", "r200"]) {
         tr.appendChild(el("td", { class: "num " + pctClass(r[key]) }, fmtPct(r[key])));
       }
+      tr.addEventListener("click", () => openCoinModal(r.coin_id));
       tbody.appendChild(tr);
     }
   }
@@ -443,6 +509,98 @@
     document.getElementById("coin-search").addEventListener("input", renderCoinsTable);
     document.getElementById("coin-category-filter").addEventListener("change", renderCoinsTable);
     document.getElementById("coin-status-filter").addEventListener("change", renderCoinsTable);
+  }
+
+  // ---- coin detail modal ----
+
+  let coinModalChart = null;
+
+  function openCoinModal(coinId) {
+    const coin = (DATA.coins || []).find((c) => c.coin_id === coinId);
+    const series = (DATA.coin_series && DATA.coin_series[coinId]) || { price_series: [], tenures: [] };
+    if (!coin) return;
+
+    document.getElementById("coin-modal-title").textContent = `${coin.symbol} -- ${coin.name}`;
+    const catBadge = document.getElementById("coin-modal-category");
+    catBadge.textContent = coin.category;
+    catBadge.style.borderColor = categoryColor(coin.category);
+    catBadge.style.color = categoryColor(coin.category);
+
+    const ctx = document.getElementById("coin-modal-chart").getContext("2d");
+    if (coinModalChart) coinModalChart.destroy();
+    const labels = series.price_series.map((p) => p.date);
+    // Category x-axis (labels array) instead of a "time" scale -- Chart.js's time
+    // scale needs an external date-adapter library we don't vendor; plain date-string
+    // labels render fine and we don't need axis-level date math for a sparkline.
+    coinModalChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "price (USD)",
+          data: series.price_series.map((p) => p.price),
+          borderColor: categoryColor(coin.category),
+          backgroundColor: categoryColor(coin.category),
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.15,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            ticks: {
+              color: cssVar("--text-muted"),
+              font: { family: cssVar("--mono"), size: 10 },
+              maxTicksLimit: 8,
+              autoSkip: true,
+            },
+            grid: { color: cssVar("--gridline") },
+          },
+          y: {
+            ticks: { color: cssVar("--text-muted"), font: { family: cssVar("--mono"), size: 10 } },
+            grid: { color: cssVar("--gridline") },
+          },
+        },
+      },
+    });
+
+    const table = document.getElementById("coin-modal-tenures");
+    table.innerHTML = "";
+    table.appendChild(el("tr", {}, [
+      el("th", {}, "Entry"), el("th", {}, "Entry $"), el("th", {}, "Exit"),
+      el("th", {}, "Exit $"), el("th", {}, "Days"), el("th", {}, "Status"),
+    ]));
+    for (const t of series.tenures) {
+      table.appendChild(el("tr", {}, [
+        el("td", {}, t.entry_date),
+        el("td", { class: "num" }, t.entry_price !== null ? t.entry_price.toFixed(4) : "—"),
+        el("td", {}, t.exit_date || "—"),
+        el("td", { class: "num" }, t.exit_price !== null ? t.exit_price.toFixed(4) : "—"),
+        el("td", { class: "num" }, String(t.duration_days)),
+        el("td", { class: t.is_active ? "pos-text" : "muted-text" }, t.is_active ? "active" : "exited"),
+      ]));
+    }
+
+    document.getElementById("coin-modal-backdrop").style.display = "flex";
+  }
+
+  function closeCoinModal() {
+    document.getElementById("coin-modal-backdrop").style.display = "none";
+  }
+
+  function setupCoinModal() {
+    document.getElementById("coin-modal-close").addEventListener("click", closeCoinModal);
+    document.getElementById("coin-modal-backdrop").addEventListener("click", (e) => {
+      if (e.target.id === "coin-modal-backdrop") closeCoinModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeCoinModal();
+    });
   }
 
   // ---- timeline ----
@@ -502,12 +660,15 @@
     }
     setupTabs();
     setupCoinsFilters();
+    setupCoinModal();
     if (!DATA) return;
 
     document.getElementById("generated-at").textContent = "generated: " + (DATA.meta.generated_at || "?");
     renderKpis();
     renderComposition();
     renderOverviewReturns();
+    renderBenchmark();
+    renderHallOfFame();
     renderCompByCategory();
     renderHeatmap("heatmap-mean", "mean");
     renderHeatmap("heatmap-median", "median");

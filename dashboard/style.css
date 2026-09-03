@@ -398,3 +398,127 @@ footer {
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
+
+/* ---- Benchmark panel ---- */
+
+.benchmark-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.benchmark-hero .alpha {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.benchmark-hero .alpha-label {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.benchmark-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 1fr 1fr 60px;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.benchmark-row.head {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--baseline);
+}
+
+.benchmark-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- Hall of fame ---- */
+
+.hof-list { margin-bottom: 14px; }
+
+.hof-list h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
+.hof-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 50px 70px;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.hof-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- Coins table rows are clickable ---- */
+
+#coins-table tbody tr { cursor: pointer; }
+
+/* ---- Coin detail modal ---- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.modal-close:hover { color: var(--text-primary); }
+
+.modal-body { padding: 16px 18px; }
+
+.modal-body h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 16px 0 10px;
+}
