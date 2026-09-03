@@ -1,61 +1,61 @@
-# Prompt para Claude Code — Crypto Top 50 Quant Tracker
+# Prompt for Claude Code — Crypto Top 50 Quant Tracker
 
-> **Cómo usar este archivo:**
-> 1. Crea la carpeta del proyecto: `mkdir crypto-top50 && cd crypto-top50`
-> 2. Guarda este archivo dentro como `SPEC.md`
-> 3. Abre Claude Code en esa carpeta: `claude`
-> 4. Pega el bloque "PROMPT INICIAL" de abajo
-> 5. Después ve pidiendo las fases una por una
+> **How to use this file:**
+> 1. Create the project folder: `mkdir crypto-top50 && cd crypto-top50`
+> 2. Save this file inside it as `SPEC.md`
+> 3. Open Claude Code in that folder: `claude`
+> 4. Paste the "INITIAL PROMPT" block below
+> 5. Then ask for the phases one at a time
 
 ---
 
-## PROMPT INICIAL (pega esto tal cual)
+## INITIAL PROMPT (paste this as-is)
 
 ```
-Lee SPEC.md en esta carpeta. Es la especificación completa de lo que quiero construir.
+Read SPEC.md in this folder. It's the full specification of what I want to build.
 
-Antes de escribir código:
-1. Confirma que entendiste el objetivo en 3-4 bullets
-2. Propón la estructura de archivos que vas a crear
-3. Dime qué decisiones técnicas tomarías distinto y por qué
+Before writing any code:
+1. Confirm you understood the goal in 3-4 bullets
+2. Propose the file structure you're going to create
+3. Tell me which technical decisions you'd make differently, and why
 
-No escribas código todavía. Espera mi OK.
+Don't write code yet. Wait for my OK.
 ```
 
 ---
 
 # SPEC: Crypto Top 50 Quantitative Tracker
 
-## 1. Objetivo
+## 1. Goal
 
-Sistema en Python que rastrea las **top 50 criptomonedas por market cap** y genera análisis puramente cuantitativo sobre:
+A Python system that tracks the **top 50 cryptocurrencies by market cap** and generates purely quantitative analysis on:
 
-- **Permanencia**: cuánto tiempo lleva cada moneda dentro del top 50, cuántas veces ha entrado y salido, duración promedio por estadía
-- **Retornos post-entrada**: retorno % a los 20, 50, 100 y 200 días desde que una moneda entra al top 50
-- **Composición por categoría**: qué % del top 50 es Layer 1, Layer 2, DeFi, Stablecoin, Meme, AI, etc.
-- **Performance por categoría**: retorno promedio y permanencia promedio agrupado por tipo de moneda
+- **Tenure**: how long each coin has spent in the top 50, how many times it has entered and exited, average duration per stay
+- **Post-entry returns**: % return at 20, 50, 100, and 200 days after a coin enters the top 50
+- **Category composition**: what % of the top 50 is Layer 1, Layer 2, DeFi, Stablecoin, Meme, AI, etc.
+- **Category performance**: average return and average tenure grouped by coin type
 
-La tesis del proyecto: *entrar al top 50 es una señal medible. ¿Qué pasa después? ¿Qué categorías sobreviven y cuáles son flashes?*
+The project's thesis: *entering the top 50 is a measurable signal. What happens next? Which categories survive, and which are flashes in the pan?*
 
 ---
 
 ## 2. Stack
 
-| Componente | Tecnología | Por qué |
+| Component | Technology | Why |
 |---|---|---|
-| Lenguaje | Python 3.11+ | ecosistema de datos |
-| Datos de mercado | CoinGecko API (tier gratuito) | sin API key, histórico desde 2013 |
-| Almacenamiento | SQLite | histórico persistente, queries SQL, un solo archivo |
-| Análisis | pandas | agregaciones por categoría |
-| Config | archivo `.yaml` o `.toml` | categorías editables sin tocar código |
-| CLI | `argparse` o `typer` | comandos claros |
-| Dashboard | HTML estático + Chart.js | abrible sin servidor, fácil de compartir |
+| Language | Python 3.11+ | data ecosystem |
+| Market data | CoinGecko API (free tier) | no API key, history back to 2013 |
+| Storage | SQLite | persistent history, SQL queries, single file |
+| Analysis | pandas | category aggregations |
+| Config | `.yaml` or `.toml` file | editable categories without touching code |
+| CLI | `argparse` or `typer` | clear commands |
+| Dashboard | Static HTML + Chart.js | opens without a server, easy to share |
 
-**Restricción importante:** el tier gratuito de CoinGecko permite ~30 requests/minuto. El sistema debe respetar esto con rate limiting automático y reintentos con backoff.
+**Important constraint:** CoinGecko's free tier allows ~30 requests/minute. The system must respect this with automatic rate limiting and backoff retries.
 
 ---
 
-## 3. Estructura de archivos objetivo
+## 3. Target file structure
 
 ```
 crypto-top50/
@@ -63,15 +63,15 @@ crypto-top50/
 ├── README.md
 ├── requirements.txt
 ├── config/
-│   └── categories.yaml       # mapeo coin_id → categoría
+│   └── categories.yaml       # coin_id -> category mapping
 ├── src/
 │   ├── __init__.py
-│   ├── db.py                 # esquema SQLite + queries
-│   ├── coingecko.py          # cliente API con rate limiting
-│   ├── tracker.py            # lógica de entradas/salidas del top 50
-│   ├── returns.py            # cálculo de retornos d20/d50/d100/d200
-│   ├── analytics.py          # agregaciones por categoría (pandas)
-│   └── export.py             # genera JSON/CSV para el dashboard
+│   ├── db.py                 # SQLite schema + queries
+│   ├── coingecko.py          # API client with rate limiting
+│   ├── tracker.py            # top-50 entry/exit logic
+│   ├── returns.py            # d20/d50/d100/d200 return calculation
+│   ├── analytics.py          # category aggregations (pandas)
+│   └── export.py             # generates JSON/CSV for the dashboard
 ├── dashboard/
 │   ├── index.html
 │   ├── style.css
@@ -88,10 +88,10 @@ crypto-top50/
 
 ---
 
-## 4. Esquema de base de datos
+## 4. Database schema
 
 ```sql
--- Catálogo de monedas
+-- Coin catalog
 CREATE TABLE coins (
     coin_id      TEXT PRIMARY KEY,
     symbol       TEXT NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE coins (
     first_seen   DATE
 );
 
--- Snapshot diario del top 50
+-- Daily top-50 snapshot
 CREATE TABLE snapshots (
     snapshot_date DATE NOT NULL,
     coin_id       TEXT NOT NULL,
@@ -112,20 +112,20 @@ CREATE TABLE snapshots (
     FOREIGN KEY (coin_id) REFERENCES coins(coin_id)
 );
 
--- Períodos de permanencia (una fila por "estadía" en el top 50)
+-- Tenure periods (one row per "stay" in the top 50)
 CREATE TABLE tenures (
     tenure_id     INTEGER PRIMARY KEY AUTOINCREMENT,
     coin_id       TEXT NOT NULL,
     entry_date    DATE NOT NULL,
     entry_price   REAL NOT NULL,
     entry_rank    INTEGER,
-    exit_date     DATE,              -- NULL si sigue dentro
+    exit_date     DATE,              -- NULL if still in
     exit_price    REAL,
     days_in_top50 INTEGER,
     FOREIGN KEY (coin_id) REFERENCES coins(coin_id)
 );
 
--- Retornos calculados por hito
+-- Returns computed per milestone
 CREATE TABLE returns (
     tenure_id     INTEGER NOT NULL,
     milestone_day INTEGER NOT NULL,  -- 20, 50, 100, 200
@@ -136,7 +136,7 @@ CREATE TABLE returns (
     FOREIGN KEY (tenure_id) REFERENCES tenures(tenure_id)
 );
 
--- Cache de precios históricos (evita re-llamar la API)
+-- Historical price cache (avoids re-calling the API)
 CREATE TABLE price_cache (
     coin_id    TEXT NOT NULL,
     price_date DATE NOT NULL,
@@ -145,74 +145,74 @@ CREATE TABLE price_cache (
 );
 ```
 
-**Índices sugeridos:** `snapshots(coin_id)`, `tenures(coin_id, exit_date)`, `price_cache(coin_id)`.
+**Suggested indexes:** `snapshots(coin_id)`, `tenures(coin_id, exit_date)`, `price_cache(coin_id)`.
 
 ---
 
-## 5. Lógica central: detección de entradas y salidas
+## 5. Core logic: entry/exit detection
 
-Este es el corazón del sistema. Cada vez que se corre un snapshot:
+This is the heart of the system. Every time a snapshot runs:
 
 ```
-top50_hoy   = set de coin_ids en el top 50 de hoy
-top50_ayer  = set de coin_ids del último snapshot
+top50_today     = set of coin_ids in today's top 50
+top50_yesterday = set of coin_ids from the last snapshot
 
-ENTRADAS = top50_hoy - top50_ayer
-    → crear nueva fila en `tenures` con entry_date = hoy, entry_price = precio actual
+ENTRIES = top50_today - top50_yesterday
+    -> create a new row in `tenures` with entry_date = today, entry_price = current price
 
-SALIDAS = top50_ayer - top50_hoy
-    → cerrar el tenure abierto: exit_date = hoy, calcular days_in_top50
+EXITS = top50_yesterday - top50_today
+    -> close the open tenure: exit_date = today, compute days_in_top50
 
-PERMANECEN = top50_hoy ∩ top50_ayer
-    → solo actualizar days_in_top50 del tenure abierto
+CONTINUING = top50_today ∩ top50_yesterday
+    -> just update days_in_top50 on the open tenure
 ```
 
-**Caso borde a manejar:** si hay un gap en los snapshots (no corriste el script por una semana), no asumir continuidad. Registrar el gap y marcar los tenures afectados con un flag `has_gap`.
+**Edge case to handle:** if there's a gap in the snapshots (the script didn't run for a week), don't assume continuity. Log the gap and flag the affected tenures with a `has_gap` flag.
 
 ---
 
-## 6. Backfill histórico
+## 6. Historical backfill
 
-El problema: si empiezo hoy, no tengo historia. Solución en dos modos:
+The problem: if I start today, I have no history. Two-mode solution:
 
-### Modo A — Backfill sintético (recomendado para arrancar)
-Usar el endpoint de CoinGecko `/coins/{id}/market_chart/range` para reconstruir el market cap histórico de las ~150 monedas más grandes, y **recalcular el top 50 día por día hacia atrás** durante los últimos 2-3 años.
+### Mode A — Synthetic backfill (recommended to get started)
+Use CoinGecko's `/coins/{id}/market_chart/range` endpoint to reconstruct historical market cap for the ~150 largest coins, and **recompute the top 50 day by day going backward** over the last 2-3 years.
 
-Esto genera de golpe años de tenures y retornos reales sin esperar.
+This generates years of real tenures and returns in one shot, with no waiting.
 
-**Costo:** ~150 llamadas API (una por moneda, cada una devuelve el rango completo). Muy razonable.
+**Cost:** ~150 API calls (one per coin, each returning the full range). Very reasonable.
 
-### Modo B — Acumulativo
-Correr el snapshot diario y dejar que la historia se acumule. Complementa al Modo A hacia adelante.
+### Mode B — Cumulative
+Run the daily snapshot and let history accumulate. Complements Mode A going forward.
 
-**Implementa el Modo A como comando `backfill`.** Es la diferencia entre un proyecto con datos y uno vacío.
+**Implement Mode A as the `backfill` command.** It's the difference between a project with data and an empty one.
 
 ---
 
-## 7. Cálculo de retornos
+## 7. Return calculation
 
-Para cada `tenure`, para cada hito en `[20, 50, 100, 200]`:
+For each `tenure`, for each milestone in `[20, 50, 100, 200]`:
 
 ```python
 target_date = entry_date + timedelta(days=milestone)
 
 if target_date > today:
-    skip  # aún no ha pasado ese tiempo
+    skip  # that much time hasn't passed yet
 
-price_at_day = get_price(coin_id, target_date)   # con cache
+price_at_day = get_price(coin_id, target_date)   # with cache
 return_pct = ((price_at_day - entry_price) / entry_price) * 100
 ```
 
-**Requisitos:**
-- Siempre consultar `price_cache` antes de llamar la API
-- Los retornos ya calculados no se recalculan (son inmutables)
-- Si un tenure terminó antes del hito (ej: salió del top 50 al día 30, hito d50), **igual calcular el retorno** — es información valiosa. Marcar con flag `exited_before_milestone`.
+**Requirements:**
+- Always check `price_cache` before calling the API
+- Already-computed returns are never recalculated (they're immutable)
+- If a tenure ended before the milestone (e.g. exited the top 50 on day 30, milestone d50), **still compute the return** — it's valuable information. Flag it with `exited_before_milestone`.
 
 ---
 
-## 8. Categorización
+## 8. Categorization
 
-Archivo `config/categories.yaml`:
+`config/categories.yaml` file:
 
 ```yaml
 categories:
@@ -301,39 +301,39 @@ categories:
 fallback: "Other"
 ```
 
-**Requisito:** al correr el tracker, si aparece una moneda sin categoría, imprimir un warning claro listándola para que yo la agregue manualmente. No fallar silenciosamente.
+**Requirement:** when running the tracker, if a coin shows up without a category, print a clear warning listing it so I can add it manually. Never fail silently.
 
 ---
 
 ## 9. CLI
 
 ```bash
-python main.py init                      # crea DB + esquema
-python main.py backfill --years 3        # reconstruye historia
-python main.py snapshot                  # captura top 50 de hoy
-python main.py returns                   # calcula retornos pendientes
-python main.py analyze                   # genera output/analysis.json
-python main.py export --format csv       # exporta tabla
+python main.py init                      # creates DB + schema
+python main.py backfill --years 3        # rebuilds history
+python main.py snapshot                  # captures today's top 50
+python main.py returns                   # computes pending returns
+python main.py analyze                   # generates output/analysis.json
+python main.py export --format csv       # exports the table
 python main.py run                       # snapshot + returns + analyze
-python main.py status                    # resumen en terminal
+python main.py status                    # terminal summary
 ```
 
-El comando `status` debe imprimir algo así en la terminal:
+The `status` command should print something like this to the terminal:
 
 ```
 ┌─ TOP 50 CRYPTO TRACKER ─────────────────────────┐
-│ Snapshots:        847 días (2023-01-15 → hoy)   │
-│ Monedas trackeadas: 94                          │
-│ Tenures totales:   142 (50 activos, 92 cerrados)│
-│ Retornos calculados: 388 / 424                  │
+│ Snapshots:        847 days (2023-01-15 -> today)│
+│ Coins tracked:      94                          │
+│ Total tenures:     142 (50 active, 92 closed)   │
+│ Returns computed:   388 / 424                   │
 ├─────────────────────────────────────────────────┤
-│ COMPOSICIÓN ACTUAL                              │
+│ CURRENT COMPOSITION                              │
 │   Layer 1        32%  ████████████              │
 │   DeFi           16%  ██████                    │
 │   Stablecoin     12%  ████                      │
 │   Meme           10%  ███                       │
 ├─────────────────────────────────────────────────┤
-│ RETORNO PROMEDIO d90 POR CATEGORÍA              │
+│ AVG d90 RETURN BY CATEGORY                      │
 │   AI / DePIN    +142%                           │
 │   Meme           +87%                           │
 │   Layer 1        +31%                           │
@@ -343,112 +343,112 @@ El comando `status` debe imprimir algo así en la terminal:
 
 ---
 
-## 10. Métricas que debe calcular `analytics.py`
+## 10. Metrics `analytics.py` must compute
 
-### Por moneda
-- Días totales en top 50 (suma de todos los tenures)
-- Número de entradas (cuántas veces ha entrado)
-- Duración promedio por estadía
-- Rank promedio, rank mínimo (mejor), rank actual
-- Retornos d20/d50/d100/d200 de cada tenure
-- ¿Sigue dentro? sí/no
+### Per coin
+- Total days in the top 50 (sum across all tenures)
+- Number of entries (how many times it has entered)
+- Average duration per stay
+- Average rank, minimum (best) rank, current rank
+- d20/d50/d100/d200 returns for each tenure
+- Still in? yes/no
 
-### Por categoría
-- % del top 50 actual
-- Retorno promedio y **mediana** en cada hito (la mediana importa: las medias se distorsionan con un +3000% de una meme)
-- Duración promedio en top 50
-- Tasa de supervivencia: % de monedas de esa categoría que sobreviven >90, >180, >365 días
-- Volatilidad de retornos (desviación estándar)
+### Per category
+- % of the current top 50
+- Average and **median** return at each milestone (the median matters: averages get distorted by a single +3000% meme coin)
+- Average duration in the top 50
+- Survival rate: % of coins in that category surviving >90, >180, >365 days
+- Return volatility (standard deviation)
 
-### Globales
-- Tasa de rotación (churn) mensual del top 50
-- Distribución de duraciones (histograma)
-- Correlación entre rank de entrada y supervivencia
-- ¿Entrar en rank 45 vs rank 30 predice algo?
+### Global
+- Monthly top-50 turnover (churn) rate
+- Duration distribution (histogram)
+- Correlation between entry rank and survival
+- Does entering at rank 45 vs. rank 30 predict anything?
 
-**Nota estadística importante:** siempre reportar el `n` (tamaño de muestra) junto a cada promedio. Una categoría con 3 monedas no es comparable con una de 16.
+**Important statistical note:** always report `n` (sample size) alongside every average. A category with 3 coins isn't comparable to one with 16.
 
 ---
 
 ## 11. Dashboard
 
-HTML estático que carga `output/analysis.json`. Sin build step, sin framework, sin servidor — se abre con doble clic.
+Static HTML that loads `output/analysis.json`. No build step, no framework, no server — opens with a double-click.
 
-**Vistas:**
-1. **Overview** — KPIs, composición actual, retorno promedio por categoría
-2. **Composición** — desglose por categoría con las monedas de cada una
-3. **Retornos** — heatmap categoría × hito (d20/d50/d100/d200), con media y mediana
-4. **Supervivencia** — curva estilo Kaplan-Meier: % que sigue en top 50 vs días transcurridos, una línea por categoría
-5. **Monedas** — tabla filtrable y ordenable con todas las métricas
-6. **Timeline** — línea de tiempo de entradas y salidas por mes
+**Views:**
+1. **Overview** — KPIs, current composition, average return by category
+2. **Composition** — breakdown by category with each category's coins
+3. **Returns** — category × milestone heatmap (d20/d50/d100/d200), with mean and median
+4. **Survival** — Kaplan-Meier-style curve: % still in the top 50 vs. days elapsed, one line per category
+5. **Coins** — filterable, sortable table with all metrics
+6. **Timeline** — monthly timeline of entries and exits
 
-**Diseño:** oscuro, tipografía monospace para números, estética de terminal financiera. Debe verse bien en screenshot porque lo voy a publicar.
-
----
-
-## 12. Criterios de aceptación
-
-- [ ] `python main.py init && python main.py backfill --years 2` corre sin errores
-- [ ] La DB contiene >500 días de snapshots después del backfill
-- [ ] `analyze` produce un JSON válido con todas las métricas de la sección 10
-- [ ] El dashboard abre en el navegador y renderiza todas las vistas
-- [ ] Rate limiting funciona: no hay errores 429 durante un backfill completo
-- [ ] Si borro `data/tracker.db` y corro `init` + `backfill`, obtengo el mismo resultado (reproducible)
-- [ ] Hay tests para el cálculo de retornos y la detección de entradas/salidas
-- [ ] `README.md` explica instalación y uso en menos de 20 líneas
+**Design:** dark, monospace typography for numbers, financial-terminal aesthetic. It needs to look good in a screenshot because I'm going to publish it.
 
 ---
 
-## 13. Fases de construcción
+## 12. Acceptance criteria
 
-Pídelas a Claude Code una por una, verificando cada una antes de seguir:
+- [ ] `python main.py init && python main.py backfill --years 2` runs without errors
+- [ ] The DB contains >500 days of snapshots after the backfill
+- [ ] `analyze` produces a valid JSON with all the metrics from section 10
+- [ ] The dashboard opens in the browser and renders every view
+- [ ] Rate limiting works: no 429 errors during a full backfill
+- [ ] If I delete `data/tracker.db` and run `init` + `backfill`, I get the same result (reproducible)
+- [ ] There are tests for return calculation and entry/exit detection
+- [ ] `README.md` explains installation and usage in under 20 lines
 
-**Fase 1 — Fundación**
-`db.py` (esquema + init), `coingecko.py` (cliente con rate limiting), comando `init`, `requirements.txt`.
-*Verificar:* la DB se crea, una llamada de prueba a CoinGecko funciona.
+---
 
-**Fase 2 — Snapshots**
-`tracker.py` con la lógica de entradas/salidas, comando `snapshot`, `categories.yaml`.
-*Verificar:* correr `snapshot` dos veces, confirmar que no duplica tenures.
+## 13. Build phases
 
-**Fase 3 — Backfill**
-Reconstrucción histórica del top 50 hacia atrás.
-*Verificar:* `status` muestra cientos de días de historia.
+Ask Claude Code for these one at a time, verifying each before moving on:
 
-**Fase 4 — Retornos**
-`returns.py` con cache de precios, comando `returns`.
-*Verificar:* spot-check manual de un retorno contra CoinGecko web.
+**Phase 1 — Foundation**
+`db.py` (schema + init), `coingecko.py` (client with rate limiting), `init` command, `requirements.txt`.
+*Verify:* the DB gets created, a test call to CoinGecko works.
 
-**Fase 5 — Analytics**
-`analytics.py` con pandas, comando `analyze`, `status` con output bonito en terminal.
-*Verificar:* el JSON tiene todas las métricas.
+**Phase 2 — Snapshots**
+`tracker.py` with entry/exit logic, `snapshot` command, `categories.yaml`.
+*Verify:* run `snapshot` twice, confirm it doesn't duplicate tenures.
 
-**Fase 6 — Dashboard**
+**Phase 3 — Backfill**
+Historical reconstruction of the top 50 going backward.
+*Verify:* `status` shows hundreds of days of history.
+
+**Phase 4 — Returns**
+`returns.py` with price caching, `returns` command.
+*Verify:* manually spot-check one return against the CoinGecko website.
+
+**Phase 5 — Analytics**
+`analytics.py` with pandas, `analyze` command, `status` with nice terminal output.
+*Verify:* the JSON has every metric.
+
+**Phase 6 — Dashboard**
 HTML/CSS/JS.
-*Verificar:* abre en navegador, todas las vistas renderizan.
+*Verify:* opens in a browser, every view renders.
 
-**Fase 7 — Pulido**
-Tests, README, `.gitignore`, manejo de errores, logging.
-
----
-
-## 14. Preferencias de estilo de código
-
-- Type hints en todas las funciones
-- Docstrings cortos, en inglés
-- Sin dependencias innecesarias — `requests`, `pandas`, `pyyaml` es suficiente
-- Errores de API deben fallar con mensajes claros, no con stack traces crudos
-- Logging con el módulo `logging`, no `print()` disperso
-- Funciones pequeñas, testeables, sin efectos secundarios ocultos
-- Nada de sobreingeniería: no quiero clases abstractas ni patrones de diseño donde una función basta
+**Phase 7 — Polish**
+Tests, README, `.gitignore`, error handling, logging.
 
 ---
 
-## 15. Preguntas abiertas para discutir con Claude Code
+## 14. Code style preferences
 
-Antes de la Fase 3, plantéale esto:
+- Type hints on every function
+- Short docstrings, in English
+- No unnecessary dependencies — `requests`, `pandas`, `pyyaml` is enough
+- API errors should fail with clear messages, not raw stack traces
+- Logging via the `logging` module, not scattered `print()` calls
+- Small, testable functions with no hidden side effects
+- No over-engineering: no abstract classes or design patterns where a plain function will do
 
-1. ¿El backfill debe reconstruir el top 50 con las top 150 actuales, o hay forma de obtener el ranking histórico real? (Sesgo de supervivencia: las monedas que colapsaron y salieron del top 150 no aparecerían.)
-2. ¿Cómo manejar rebrandings y migraciones de token? (MATIC → POL, LUNA → LUNC)
-3. ¿Las stablecoins deben excluirse de los promedios de retorno? Su retorno es ~0% por diseño y arrastran las medias hacia abajo.
-4. ¿Vale la pena guardar el precio diario de todas las monedas trackeadas, o solo en los hitos?
+---
+
+## 15. Open questions to discuss with Claude Code
+
+Before Phase 3, raise these with it:
+
+1. Should the backfill reconstruct the top 50 from today's top 150, or is there a way to get the real historical ranking? (Survivorship bias: coins that collapsed and dropped out of the top 150 wouldn't show up.)
+2. How should rebrandings and token migrations be handled? (MATIC -> POL, LUNA -> LUNC)
+3. Should stablecoins be excluded from return averages? Their return is ~0% by design and drags the averages down.
+4. Is it worth storing the daily price of every tracked coin, or only at the milestones?

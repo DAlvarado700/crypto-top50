@@ -96,10 +96,10 @@
   function renderKpis() {
     const m = DATA.meta;
     const tiles = [
-      { label: "Snapshots", value: m.snapshot_days + " dias", sub: `${m.first_snapshot_date || "?"} -> ${m.last_snapshot_date || "?"}` },
-      { label: "Monedas trackeadas", value: m.coins_tracked, sub: "" },
-      { label: "Tenures", value: m.tenures_total, sub: `${m.tenures_active} activos, ${m.tenures_closed} cerrados` },
-      { label: "Retornos calculados", value: `${m.returns_computed} / ${m.returns_expected}`, sub: "" },
+      { label: "Snapshots", value: m.snapshot_days + " days", sub: `${m.first_snapshot_date || "?"} -> ${m.last_snapshot_date || "?"}` },
+      { label: "Coins tracked", value: m.coins_tracked, sub: "" },
+      { label: "Tenures", value: m.tenures_total, sub: `${m.tenures_active} active, ${m.tenures_closed} closed` },
+      { label: "Returns computed", value: `${m.returns_computed} / ${m.returns_expected}`, sub: "" },
     ];
     const grid = document.getElementById("kpi-grid");
     grid.innerHTML = "";
@@ -131,8 +131,8 @@
     const target2 = document.getElementById("comp-full");
     [target1, target2].forEach((t) => (t.innerHTML = ""));
     if (comp.length === 0) {
-      target1.appendChild(el("div", { class: "empty-state" }, "sin datos"));
-      target2.appendChild(el("div", { class: "empty-state" }, "sin datos"));
+      target1.appendChild(el("div", { class: "empty-state" }, "no data"));
+      target2.appendChild(el("div", { class: "empty-state" }, "no data"));
       return;
     }
     for (const c of comp) target1.appendChild(compositionRow(c, false));
@@ -147,7 +147,7 @@
       .sort((a, b) => b.returns["100"].mean - a.returns["100"].mean);
 
     if (stats.length === 0) {
-      target.appendChild(el("div", { class: "empty-state" }, "todavia no hay retornos d100 calculados"));
+      target.appendChild(el("div", { class: "empty-state" }, "no d100 returns computed yet"));
       return;
     }
     const maxAbs = Math.max(...stats.map((s) => Math.abs(s.returns["100"].mean)), 1);
@@ -164,7 +164,7 @@
     }
   }
 
-  // ---- composicion view: coins grouped by category ----
+  // ---- composition view: coins grouped by category ----
 
   function renderCompByCategory() {
     const target = document.getElementById("comp-by-category");
@@ -175,7 +175,7 @@
     }
     const cats = Object.keys(byCat).sort((a, b) => (byCat[b].length - byCat[a].length));
     if (cats.length === 0) {
-      target.appendChild(el("div", { class: "empty-state" }, "sin datos"));
+      target.appendChild(el("div", { class: "empty-state" }, "no data"));
       return;
     }
     for (const cat of cats) {
@@ -183,7 +183,7 @@
       const color = categoryColor(cat);
       const badges = coins.map((c) =>
         el("span", { class: "badge", style: `border-color:${color};color:${color}` },
-          c.symbol + (c.currently_in_top50 ? "" : " (fuera)"))
+          c.symbol + (c.currently_in_top50 ? "" : " (exited)"))
       );
       target.appendChild(el("div", { style: "margin-bottom:14px" }, [
         el("div", { style: `color:${color};font-weight:700;margin-bottom:6px` }, `${cat} (${coins.length})`),
@@ -192,14 +192,14 @@
     }
   }
 
-  // ---- retornos heatmap ----
+  // ---- returns heatmap ----
 
   function renderHeatmap(tableId, statKey) {
     const table = document.getElementById(tableId);
     table.innerHTML = "";
     const stats = DATA.category_stats || [];
     if (stats.length === 0) {
-      table.appendChild(el("tr", {}, el("td", {}, "sin datos")));
+      table.appendChild(el("tr", {}, el("td", {}, "no data")));
       return;
     }
     let maxAbs = 1;
@@ -208,7 +208,7 @@
       if (v !== null && v !== undefined) maxAbs = Math.max(maxAbs, Math.abs(v));
     }
 
-    const thead = el("tr", {}, [el("th", {}, "Categoria"), ...MILESTONES.map((m) => el("th", {}, `d${m}`))]);
+    const thead = el("tr", {}, [el("th", {}, "Category"), ...MILESTONES.map((m) => el("th", {}, `d${m}`))]);
     table.appendChild(thead);
 
     for (const c of stats) {
@@ -247,7 +247,7 @@
 
     if (eligible.length === 0) {
       document.getElementById("survival-chart").parentElement.innerHTML =
-        '<div class="empty-state">sin datos suficientes para curvas de supervivencia</div>';
+        '<div class="empty-state">not enough data for survival curves</div>';
     } else {
       const datasets = eligible.map((cat) => {
         const color = categoryColor(cat);
@@ -270,8 +270,8 @@
         type: "line",
         data: { datasets },
         options: chartBaseOptions({
-          xTitle: "dias desde entrada al top 50",
-          yTitle: "% que sigue dentro",
+          xTitle: "days since top 50 entry",
+          yTitle: "% still in",
           yMin: 0, yMax: 100,
           showLegend: false,
         }),
@@ -286,11 +286,11 @@
     table.innerHTML = "";
     const stats = DATA.category_stats || [];
     if (stats.length === 0) {
-      table.appendChild(el("tr", {}, el("td", {}, "sin datos")));
+      table.appendChild(el("tr", {}, el("td", {}, "no data")));
       return;
     }
     table.appendChild(el("tr", {}, [
-      el("th", {}, "Categoria"), el("th", {}, "n"), el("th", {}, "Duracion prom."),
+      el("th", {}, "Category"), el("th", {}, "n"), el("th", {}, "Avg duration"),
       el("th", {}, ">90d"), el("th", {}, ">180d"), el("th", {}, ">365d"),
     ]));
     for (const c of stats) {
@@ -344,17 +344,17 @@
     };
   }
 
-  // ---- monedas table ----
+  // ---- coins table ----
 
   const COIN_COLUMNS = [
     { key: "symbol", label: "Symbol" },
-    { key: "category", label: "Categoria" },
-    { key: "status", label: "Estado" },
+    { key: "category", label: "Category" },
+    { key: "status", label: "Status" },
     { key: "current_rank", label: "Rank", num: true },
-    { key: "best_rank", label: "Mejor rank", num: true },
-    { key: "entries_count", label: "Entradas", num: true },
-    { key: "days_total_in_top50", label: "Dias total", num: true },
-    { key: "avg_tenure_days", label: "Estadia prom.", num: true },
+    { key: "best_rank", label: "Best rank", num: true },
+    { key: "entries_count", label: "Entries", num: true },
+    { key: "days_total_in_top50", label: "Total days", num: true },
+    { key: "avg_tenure_days", label: "Avg tenure", num: true },
     { key: "r20", label: "d20", num: true },
     { key: "r50", label: "d50", num: true },
     { key: "r100", label: "d100", num: true },
@@ -366,7 +366,7 @@
   function coinsRows() {
     return (DATA.coins || []).map((c) => ({
       ...c,
-      status: c.currently_in_top50 ? "activa" : "salio",
+      status: c.currently_in_top50 ? "active" : "exited",
       r20: c.returns["20"], r50: c.returns["50"], r100: c.returns["100"], r200: c.returns["200"],
     }));
   }
@@ -419,7 +419,7 @@
     const tbody = document.querySelector("#coins-table tbody");
     tbody.innerHTML = "";
     if (filtered.length === 0) {
-      tbody.appendChild(el("tr", {}, el("td", { colspan: String(COIN_COLUMNS.length) }, "sin resultados")));
+      tbody.appendChild(el("tr", {}, el("td", { colspan: String(COIN_COLUMNS.length) }, "no results")));
       return;
     }
     for (const r of filtered) {
@@ -454,7 +454,7 @@
     list.innerHTML = "";
     const months = DATA.timeline || [];
     if (months.length === 0) {
-      list.appendChild(el("div", { class: "empty-state" }, "sin datos"));
+      list.appendChild(el("div", { class: "empty-state" }, "no data"));
     } else {
       for (const m of months) {
         const entries = m.entries.map((c) => el("span", { class: "badge entry" }, c.symbol));
@@ -475,8 +475,8 @@
       data: {
         labels: churn.map((c) => c.month),
         datasets: [
-          { label: "entradas", data: churn.map((c) => c.entries), backgroundColor: cssVar("--pos") },
-          { label: "salidas", data: churn.map((c) => -c.exits), backgroundColor: cssVar("--neg") },
+          { label: "entries", data: churn.map((c) => c.entries), backgroundColor: cssVar("--pos") },
+          { label: "exits", data: churn.map((c) => -c.exits), backgroundColor: cssVar("--neg") },
         ],
       },
       options: {
@@ -504,7 +504,7 @@
     setupCoinsFilters();
     if (!DATA) return;
 
-    document.getElementById("generated-at").textContent = "generado: " + (DATA.meta.generated_at || "?");
+    document.getElementById("generated-at").textContent = "generated: " + (DATA.meta.generated_at || "?");
     renderKpis();
     renderComposition();
     renderOverviewReturns();

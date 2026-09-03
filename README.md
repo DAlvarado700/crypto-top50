@@ -1,21 +1,21 @@
 # Crypto Top 50 Quant Tracker
-Rastrea el top 50 cripto por market cap: permanencia, retornos post-entrada (d20/50/100/200) y performance por categoría.
+Tracks the crypto top 50 by market cap: time spent in the ranking, post-entry returns (d20/50/100/200), and performance by category.
 
-**Instalación:**
+**Install:**
 ```
 pip install -r requirements.txt
-cp .env.example .env   # opcional: CG_API_KEY gratis de coingecko.com/en/developers/dashboard
+cp .env.example .env   # optional: free CG_API_KEY from coingecko.com/en/developers/dashboard
 ```
-**Uso:**
+**Usage:**
 ```
-python main.py init && python main.py backfill --years 1   # reconstruye historia (~364 dias, ver nota)
-python main.py run                                          # snapshot + returns + analyze (uso diario)
-python main.py status                                       # resumen en terminal
+python main.py init && python main.py backfill --years 1   # rebuilds history (~364 days, see note)
+python main.py run                                          # snapshot + returns + analyze (daily use)
+python main.py status                                       # terminal summary
 ```
-Abrí `dashboard/index.html` con doble clic (no necesita servidor ni internet).
+Open `dashboard/index.html` by double-clicking it (no server, no internet needed).
 
-**Nota:** el free tier de CoinGecko limita histórico a ~365 días (aunque tengas API key demo); `--years 3` se clampea solo. Corré `snapshot` seguido para acumular más historia.
+**Note:** CoinGecko's free tier caps historical data at ~365 days (even with a demo API key); `--years 3` gets clamped automatically. Run `snapshot` regularly to accumulate more history over time.
 
-`config/categories.yaml`: categorías editables. `config/seed_extra_coins.yaml`: monedas muertas/deslistadas a forzar en el backfill (sesgo de supervivencia, ver comentario ahí).
+`config/categories.yaml`: editable category mapping. `config/seed_extra_coins.yaml`: force-include dead/delisted coins in the backfill (survivorship-bias mitigation, see the comment there).
 
 Tests: `pip install pytest && pytest tests/ -v`
