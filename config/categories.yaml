@@ -1,0 +1,120 @@
+# Maps CoinGecko coin_id -> category. Edit freely; no code changes needed.
+# If a coin shows up without a category, the tracker prints a warning listing it
+# so you can add it here manually.
+categories:
+  Layer 1:
+    - bitcoin
+    - ethereum
+    - solana
+    - cardano
+    - avalanche-2
+    - tron
+    - polkadot
+    - near
+    - aptos
+    - sui
+    - the-open-network
+    - internet-computer
+    - hedera-hashgraph
+    - cosmos
+    - algorand
+    - kaspa
+    - bitcoin-cash
+    - litecoin
+    - hyperliquid
+    - canton-network
+    - ethereum-classic
+    - pi-network
+    - plasma
+
+  Layer 2:
+    - matic-network
+    - polygon-ecosystem-token
+    - arbitrum
+    - optimism
+    - immutable-x
+    - mantle
+    - starknet
+
+  DeFi:
+    - uniswap
+    - aave
+    - maker
+    - lido-dao
+    - jupiter-exchange-solana
+    - ethena
+    - morpho
+    - sky
+    - aster-2
+    - world-liberty-financial
+
+  Oracle / Infra:
+    - chainlink
+    - the-graph
+    - filecoin
+    - flare-networks
+
+  Stablecoin:
+    - tether
+    - usd-coin
+    - dai
+    - first-digital-usd
+    - ethena-usde
+    - usds
+    - usd1-wlfi
+    - global-dollar
+    - paypal-usd
+    - tether-gold
+    - pax-gold
+    - usdd
+    - ripple-usd
+    - falcon-finance
+
+  Meme:
+    - dogecoin
+    - shiba-inu
+    - pepe
+    - bonk
+    - dogwifcoin
+    - floki
+    - memecore
+    - pump-fun
+
+  Exchange Token:
+    - binancecoin
+    - okb
+    - crypto-com-chain
+    - leo-token
+    - whitebit
+    - htx-dao
+    - rain
+    - bitget-token
+
+  AI / DePIN:
+    - render-token
+    - bittensor
+    - fetch-ai
+    - helium
+    - worldcoin-wld
+
+  Payments / RWA:
+    - ripple
+    - stellar
+    - ondo-finance
+    - figure-heloc
+    - hashnote-usyc
+    - blackrock-usd-institutional-digital-liquidity-fund
+    - ondo-us-dollar-yield
+    - hash-2
+
+  Privacy:
+    - monero
+    - zcash
+    - midnight-3
+
+  Gaming / Metaverse:
+    - the-sandbox
+    - decentraland
+    - gala
+
+fallback: "Other"

@@ -1,0 +1,14 @@
+# Backfill reconstructs historical top-50 rankings from today's largest ~150-200 coins
+# by market cap. That approach has survivorship bias: coins that collapsed and dropped
+# out of the top 150+ entirely (e.g. Terra Classic after the May 2022 crash, FTX Token
+# after the exchange collapse) never get fetched, so they're silently missing from
+# historical top-50 reconstructions even though they really were there.
+#
+# List CoinGecko coin_ids here for historically significant coins you want the backfill
+# to include regardless of their current market cap rank. This is a manual, best-effort
+# list -- not automatically discovered.
+extra_coin_ids:
+  - terra-luna       # LUNA (pre-collapse), now trades as terra-luna-2 / renamed classic
+  - terra-luna-2
+  - ftx-token
+  - celsius-degree-token

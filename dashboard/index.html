@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Top 50 Quant Tracker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <h1>&gt; Crypto Top 50 Quant Tracker</h1>
+    <div class="meta" id="generated-at">no data</div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="overview" class="active">Overview</button>
+    <button data-view="composicion">Composición</button>
+    <button data-view="retornos">Retornos</button>
+    <button data-view="supervivencia">Supervivencia</button>
+    <button data-view="monedas">Monedas</button>
+    <button data-view="timeline">Timeline</button>
+  </nav>
+
+  <div id="empty-banner" class="card" style="display:none">
+    <div class="empty-state">
+      No hay datos todavía. Corré <code>python main.py backfill</code> y despues <code>python main.py analyze</code>,
+      despues recargá esta página.
+    </div>
+  </div>
+
+  <main id="views">
+
+    <!-- OVERVIEW -->
+    <section class="view active" id="view-overview">
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>Composición actual del top 50</h2>
+          <div id="overview-composition"></div>
+        </div>
+        <div class="card">
+          <h2>Retorno promedio d100 por categoría</h2>
+          <div id="overview-returns"></div>
+          <div class="note">Excluye stablecoins del promedio global (retorno ~0% por diseño). n = tenures con retorno calculado.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPOSICION -->
+    <section class="view" id="view-composicion">
+      <div class="card">
+        <h2>Composición por categoría (top 50 actual)</h2>
+        <div id="comp-full"></div>
+      </div>
+      <div class="card">
+        <h2>Monedas por categoría</h2>
+        <div id="comp-by-category"></div>
+      </div>
+    </section>
+
+    <!-- RETORNOS -->
+    <section class="view" id="view-retornos">
+      <div class="card">
+        <h2>Retorno medio por categoría x hito</h2>
+        <div class="heatmap-wrap">
+          <table class="heatmap" id="heatmap-mean"></table>
+        </div>
+        <div class="heatmap-legend">
+          <span>negativo</span><span class="ramp"></span><span>positivo</span>
+          <span style="margin-left:16px">celda: media% <span class="n">(n)</span></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Retorno mediano por categoría x hito</h2>
+        <div class="note" style="margin:0 0 10px">La mediana importa más que la media: un solo +3000% de una meme no debería definir la categoría.</div>
+        <div class="heatmap-wrap">
+          <table class="heatmap" id="heatmap-median"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUPERVIVENCIA -->
+    <section class="view" id="view-supervivencia">
+      <div class="card">
+        <h2>% que sigue en el top 50 vs. dias transcurridos (Kaplan-Meier)</h2>
+        <div class="chart-box"><canvas id="survival-chart"></canvas></div>
+        <div class="legend-row" id="survival-legend"></div>
+        <div class="note">Curva censurada: las estadías todavía activas se tratan como censuradas en su duración actual, no como "sobrevivientes eternas".</div>
+      </div>
+      <div class="card">
+        <h2>Tasa de supervivencia por categoría</h2>
+        <div class="table-wrap">
+          <table id="survival-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- MONEDAS -->
+    <section class="view" id="view-monedas">
+      <div class="card">
+        <h2>Todas las monedas trackeadas</h2>
+        <div class="filters">
+          <input type="text" id="coin-search" placeholder="Buscar por symbol o nombre...">
+          <select id="coin-category-filter"><option value="">Todas las categorías</option></select>
+          <select id="coin-status-filter">
+            <option value="">Activas y salidas</option>
+            <option value="active">Solo activas</option>
+            <option value="exited">Solo salidas</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table id="coins-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section class="view" id="view-timeline">
+      <div class="card">
+        <h2>Entradas y salidas por mes</h2>
+        <div class="legend-row">
+          <span class="item"><span class="swatch" style="background:var(--pos)"></span> entradas</span>
+          <span class="item"><span class="swatch" style="background:var(--neg)"></span> salidas</span>
+        </div>
+        <div id="timeline-list" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <h2>Churn mensual (rotación del top 50)</h2>
+        <div class="chart-box"><canvas id="churn-chart"></canvas></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    Crypto Top 50 Quant Tracker &middot; generado localmente, sin servidor &middot;
+    datos: CoinGecko
+  </footer>
+
+</div>
+
+<script src="vendor/chart.umd.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
