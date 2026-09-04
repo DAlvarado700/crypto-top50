@@ -12,7 +12,7 @@ python main.py init && python main.py backfill --years 1   # rebuilds history (~
 python main.py run                                          # snapshot + returns + analyze (daily use)
 python main.py status                                       # terminal summary
 ```
-Open `dashboard/index.html` by double-clicking it (no server, no internet needed), or see the live version at **[link once deployed]**, updated daily by `.github/workflows/daily-update.yml`.
+Open `dashboard/index.html` by double-clicking it (no server, no internet needed), or see the live version at **[dalvarado700.github.io/-crypto-top50](https://dalvarado700.github.io/-crypto-top50/)**, updated daily by `.github/workflows/daily-update.yml`.
 
 **Note:** CoinGecko's free tier caps historical data at ~365 days (even with a demo API key); `--years 3` gets clamped automatically. Run `snapshot` regularly to accumulate more history over time.
 
