@@ -67,6 +67,25 @@ CREATE TABLE IF NOT EXISTS snapshot_log (
     gap_days      INTEGER NOT NULL DEFAULT 0
 );
 
+-- BTC macro/position indicators (rainbow chart, regime, dominance, fear & greed).
+CREATE TABLE IF NOT EXISTS btc_price_history (
+    price_date DATE PRIMARY KEY,
+    price_usd  REAL,
+    market_cap REAL
+);
+
+CREATE TABLE IF NOT EXISTS global_snapshots (
+    snapshot_date        DATE PRIMARY KEY,
+    total_market_cap_usd REAL,
+    btc_dominance_pct    REAL
+);
+
+CREATE TABLE IF NOT EXISTS fear_greed_history (
+    fg_date        DATE PRIMARY KEY,
+    value          INTEGER,
+    classification TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_snapshots_coin_id ON snapshots(coin_id);
 CREATE INDEX IF NOT EXISTS idx_tenures_coin_exit ON tenures(coin_id, exit_date);
 CREATE INDEX IF NOT EXISTS idx_price_cache_coin ON price_cache(coin_id);

@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 
+from src import btc_indicators
 from src.config import EXCLUDE_STABLECOINS_FROM_RETURNS, MILESTONES
 
 STABLECOIN_CATEGORY = "Stablecoin"
@@ -20,6 +21,10 @@ BENCHMARK_COIN_ID = "bitcoin"
 SURVIVAL_THRESHOLDS = (90, 180, 365)
 DURATION_BUCKETS = [0, 30, 60, 90, 180, 365, float("inf")]
 DURATION_BUCKET_LABELS = ["0-30", "30-60", "60-90", "90-180", "180-365", "365+"]
+
+ALTCOIN_SEASON_WINDOW_DAYS = 90  # matches the commonly cited "altcoin season index" methodology
+ALTCOIN_SEASON_MIN_COINS = 10  # below this, the % is too noisy to report (see n alongside every average)
+ALTCOIN_SEASON_LOOKBACK_TOLERANCE_DAYS = 10  # snapshot gaps mean "90 days ago" may need a nearby stand-in
 
 
 def _load_frames(conn: sqlite3.Connection) -> dict[str, pd.DataFrame]:
@@ -341,6 +346,89 @@ def _btc_benchmark(tenures_view: pd.DataFrame, returns: pd.DataFrame, conn: sqli
     return out
 
 
+def _build_price_index(snapshots: pd.DataFrame) -> dict[str, pd.Series]:
+    """One date-indexed, sorted price Series per coin_id, built from `snapshots`
+    (no new API calls -- this is the same daily price already collected for the
+    top-50 tenure tracking, just reshaped for per-coin lookback)."""
+    out: dict[str, pd.Series] = {}
+    if snapshots.empty:
+        return out
+    priced = snapshots.dropna(subset=["price_usd"])
+    for coin_id, g in priced.groupby("coin_id"):
+        s = g.set_index(pd.to_datetime(g["snapshot_date"]))["price_usd"].sort_index()
+        out[coin_id] = s[~s.index.duplicated(keep="last")]
+    return out
+
+
+def _nearest_price_on_or_before(series: pd.Series, target: pd.Timestamp, tolerance_days: int) -> float | None:
+    pos = series.index.searchsorted(target, side="right") - 1
+    if pos < 0:
+        return None
+    found_date = series.index[pos]
+    if (target - found_date).days > tolerance_days:
+        return None
+    return float(series.iloc[pos])
+
+
+def _altcoin_season_index(snapshots: pd.DataFrame, coins: pd.DataFrame) -> dict:
+    """For each day, the % of that day's top-50 coins (excluding BTC and
+    stablecoins) whose trailing ALTCOIN_SEASON_WINDOW_DAYS return beat BTC's
+    return over the same window -- the standard "altcoin season index"
+    methodology, computed here entirely from already-collected snapshot prices
+    (no new fetching). >=75% is conventionally "altcoin season", <=25% is
+    "bitcoin season"; the dashboard applies that labeling, not this function."""
+    empty = {"history": [], "current": None, "window_days": ALTCOIN_SEASON_WINDOW_DAYS, "min_coins": ALTCOIN_SEASON_MIN_COINS}
+    if snapshots.empty:
+        return empty
+
+    price_by_coin = _build_price_index(snapshots)
+    btc_series = price_by_coin.get(BENCHMARK_COIN_ID)
+    if btc_series is None:
+        return empty
+
+    stable_ids = set(coins.loc[coins["category"] == STABLECOIN_CATEGORY, "coin_id"])
+    window = pd.Timedelta(days=ALTCOIN_SEASON_WINDOW_DAYS)
+    tol = ALTCOIN_SEASON_LOOKBACK_TOLERANCE_DAYS
+
+    history = []
+    for snapshot_date, day_rows in snapshots.groupby("snapshot_date"):
+        d = pd.Timestamp(snapshot_date)
+        past = d - window
+
+        btc_now = _nearest_price_on_or_before(btc_series, d, 0)
+        btc_past = _nearest_price_on_or_before(btc_series, past, tol)
+        if not btc_now or not btc_past:
+            history.append({"date": snapshot_date, "pct_beating_btc": None, "n": 0})
+            continue
+        btc_return = (btc_now - btc_past) / btc_past
+
+        eligible = 0
+        beating = 0
+        for coin_id in day_rows["coin_id"]:
+            if coin_id == BENCHMARK_COIN_ID or coin_id in stable_ids:
+                continue
+            series = price_by_coin.get(coin_id)
+            if series is None:
+                continue
+            now_price = _nearest_price_on_or_before(series, d, 0)
+            past_price = _nearest_price_on_or_before(series, past, tol)
+            if not now_price or not past_price:
+                continue
+            eligible += 1
+            if (now_price - past_price) / past_price > btc_return:
+                beating += 1
+
+        pct = round(beating / eligible * 100, 1) if eligible >= ALTCOIN_SEASON_MIN_COINS else None
+        history.append({"date": snapshot_date, "pct_beating_btc": pct, "n": eligible})
+
+    return {
+        "history": history,
+        "current": history[-1] if history else None,
+        "window_days": ALTCOIN_SEASON_WINDOW_DAYS,
+        "min_coins": ALTCOIN_SEASON_MIN_COINS,
+    }
+
+
 def _hall_of_fame(conn: sqlite3.Connection, top_n: int = 5) -> dict:
     """The single best and worst (tenure, milestone) returns ever recorded -- real
     individual outcomes, not category averages that smooth them out."""
@@ -444,4 +532,6 @@ def build_analysis(conn: sqlite3.Connection) -> dict:
         "timeline": _timeline(tenures_view),
         "hall_of_fame": _hall_of_fame(conn),
         "coin_series": _coin_series(conn, frames, tenures_view),
+        "btc_indicators": btc_indicators.compute(conn),
+        "altcoin_season_index": _altcoin_season_index(frames["snapshots"], frames["coins"]),
     }

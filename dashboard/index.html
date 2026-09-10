@@ -21,6 +21,8 @@
     <button data-view="survival">Survival</button>
     <button data-view="coins">Coins</button>
     <button data-view="timeline">Timeline</button>
+    <button data-view="btc">Bitcoin</button>
+    <button data-view="compare">Compare</button>
   </nav>
 
   <div id="empty-banner" class="card" style="display:none">
@@ -148,11 +150,74 @@
       </div>
     </section>
 
+    <!-- BITCOIN -->
+    <section class="view" id="view-btc">
+      <div class="kpi-grid" id="btc-regime-kpis"></div>
+      <div class="card">
+        <div class="card-head-row">
+          <h2>Rainbow chart</h2>
+          <button class="chart-tool-btn" data-reset-zoom="rainbow-chart">Reset zoom</button>
+        </div>
+        <div class="chart-box" style="height:380px"><canvas id="rainbow-chart"></canvas></div>
+        <div class="legend-row" id="rainbow-legend"></div>
+        <div class="note">Bands are a log-regression fit to this project's own cached BTC price history since 2014 (via Yahoo Finance -- CoinGecko's free tier rejects anything older than 365 days). This is a self-fit model, not a copy of a published reference chart. Scroll to zoom, drag to pan.</div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head-row">
+            <h2>Fear &amp; Greed Index</h2>
+            <button class="chart-tool-btn" data-reset-zoom="feargreed-chart">Reset zoom</button>
+          </div>
+          <div id="feargreed-current"></div>
+          <div class="chart-box" style="height:200px"><canvas id="feargreed-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head-row">
+            <h2>BTC dominance / total market cap</h2>
+            <button class="chart-tool-btn" data-reset-zoom="dominance-chart">Reset zoom</button>
+          </div>
+          <div id="dominance-current"></div>
+          <div class="chart-box" style="height:220px"><canvas id="dominance-chart"></canvas></div>
+          <div class="note">No free historical source exists for this -- it accumulates one point per day starting from when this feature shipped (and once deployed, since the daily job runs on GitHub Actions, not this machine).</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head-row">
+          <h2>Stablecoin supply trend</h2>
+          <button class="chart-tool-btn" data-reset-zoom="stablecoin-chart">Reset zoom</button>
+        </div>
+        <div class="chart-box"><canvas id="stablecoin-chart"></canvas></div>
+        <div class="note">Aggregate market cap of tracked stablecoins, as a rough "money on the sidelines" liquidity proxy -- not on-chain flow data.</div>
+      </div>
+      <div class="card">
+        <div class="card-head-row">
+          <h2>Altcoin Season Index</h2>
+          <button class="chart-tool-btn" data-reset-zoom="altcoin-season-chart">Reset zoom</button>
+        </div>
+        <div id="altcoin-season-current"></div>
+        <div class="chart-box"><canvas id="altcoin-season-chart"></canvas></div>
+        <div class="note">% of that day's top 50 (excluding BTC and stablecoins) whose trailing 90-day return beat BTC's over the same window. &ge;75% is conventionally "altcoin season", &le;25% is "Bitcoin season". Needs at least 90 days of history before the first point appears, and at least 10 eligible coins on a given day to report a value.</div>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section class="view" id="view-compare">
+      <div class="card">
+        <h2>Compare two coins (% return since entry)</h2>
+        <div class="filters">
+          <select id="compare-coin-a"></select>
+          <select id="compare-coin-b"></select>
+        </div>
+        <div class="chart-box"><canvas id="compare-chart"></canvas></div>
+        <div class="note">Each coin is rebased to 0% at its own most recent top-50 entry date, so coins that entered at very different times are still comparable on the same x-axis (days since entry).</div>
+      </div>
+    </section>
+
   </main>
 
   <footer>
     Crypto Top 50 Quant Tracker &middot; generated locally, no server &middot;
-    data: CoinGecko
+    data: CoinGecko, Alternative.me, Yahoo Finance
   </footer>
 
 </div>
@@ -177,6 +242,8 @@
 </div>
 
 <script src="vendor/chart.umd.min.js"></script>
+<script src="vendor/hammer.min.js"></script>
+<script src="vendor/chartjs-plugin-zoom.min.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

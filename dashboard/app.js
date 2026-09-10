@@ -8,6 +8,14 @@
   const DATA = window.ANALYSIS_DATA || null;
   const MILESTONES = ["20", "50", "100", "200"];
 
+  // Dates as ordinal day numbers (not a "category" x-axis) -- chartjs-plugin-zoom's
+  // zoom/pan is unreliable on category scales with thousands of categories (verified:
+  // zooming collapsed the whole axis to a single visible tick). A numeric axis with a
+  // tick formatter gives correct, smooth zoom/pan instead.
+  const DAY_MS = 86400000;
+  const dateToOrdinal = (dateStr) => Math.floor(Date.parse(dateStr) / DAY_MS);
+  const ordinalToDateLabel = (n) => new Date(n * DAY_MS).toISOString().slice(0, 10);
+
   // Fixed category -> hue order. Matches config/categories.yaml's definition order.
   // Categories beyond the 8th fold into a shared neutral gray rather than inventing
   // new hues (color-cycling breaks CVD-safety guarantees).
@@ -40,6 +48,11 @@
   function fmtNum(v) {
     if (v === null || v === undefined) return "—";
     return String(v);
+  }
+
+  function fmtUsd(v) {
+    if (v === null || v === undefined || Number.isNaN(v)) return "—";
+    return "$" + Math.round(v).toLocaleString("en-US");
   }
 
   function el(tag, attrs = {}, children = []) {
@@ -87,6 +100,16 @@
         document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
         btn.classList.add("active");
         document.getElementById("view-" + btn.dataset.view).classList.add("active");
+      });
+    });
+  }
+
+  function setupZoomResetButtons() {
+    document.querySelectorAll("[data-reset-zoom]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const canvas = document.getElementById(btn.dataset.resetZoom);
+        const chart = canvas && Chart.getChart(canvas);
+        if (chart && chart.resetZoom) chart.resetZoom();
       });
     });
   }
@@ -371,7 +394,7 @@
     }
   }
 
-  function chartBaseOptions({ xTitle, yTitle, yMin, yMax, showLegend }) {
+  function chartBaseOptions({ xTitle, yTitle, yMin, yMax, showLegend, yType, xType, xTicksLimit, zoomPan, xDateFormat }) {
     const muted = cssVar("--text-muted");
     const grid = cssVar("--gridline");
     const font = { family: cssVar("--mono") || "monospace", size: 11 };
@@ -390,16 +413,30 @@
           borderWidth: 1,
           bodyFont: font,
           titleFont: font,
+          callbacks: xDateFormat ? { title: (items) => ordinalToDateLabel(items[0].parsed.x) } : {},
         },
+        // Horizontal-only: these are all time series where "explore a date range"
+        // is the useful gesture; y stays auto-scaled/fixed rather than zoomable.
+        zoom: zoomPan ? {
+          pan: { enabled: true, mode: "x" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
+          limits: { x: { minRange: 5 } },
+        } : undefined,
       },
       scales: {
         x: {
-          type: "linear",
+          type: xType || "linear",
           title: { display: !!xTitle, text: xTitle, color: muted, font },
-          ticks: { color: muted, font },
+          ticks: {
+            color: muted,
+            font,
+            ...(xTicksLimit ? { maxTicksLimit: xTicksLimit, autoSkip: true } : {}),
+            ...(xDateFormat ? { callback: (value) => ordinalToDateLabel(value) } : {}),
+          },
           grid: { color: grid },
         },
         y: {
+          type: yType || "linear",
           min: yMin, max: yMax,
           title: { display: !!yTitle, text: yTitle, color: muted, font },
           ticks: { color: muted, font },
@@ -652,6 +689,355 @@
     });
   }
 
+  // ---- bitcoin position/strength ----
+
+  let rainbowChart = null;
+  let feargreedChart = null;
+  let dominanceChart = null;
+  let stablecoinChart = null;
+
+  // Fixed rainbow hues, cheap (blue) to bubble (red) -- a deliberate palette for
+  // this one chart's meaning, separate from the categorical --cat-* variables
+  // used for coin categories elsewhere.
+  const RAINBOW_COLORS = [
+    "#1e3a8a", "#2563eb", "#0891b2", "#059669", "#65a30d",
+    "#ca8a04", "#ea580c", "#dc2626", "#991b1b",
+  ];
+
+  function renderBtcRegime() {
+    const grid = document.getElementById("btc-regime-kpis");
+    grid.innerHTML = "";
+    const regime = (DATA.btc_indicators || {}).regime;
+    if (!regime) {
+      grid.appendChild(el("div", { class: "empty-state" }, "no data"));
+      return;
+    }
+    const rainbow = (DATA.btc_indicators || {}).rainbow;
+    const tiles = [
+      { label: "BTC price", value: fmtUsd(regime.current_price), sub: "as of " + regime.as_of },
+      { label: "Drawdown from ATH", value: fmtPct(regime.drawdown_from_ath_pct), sub: "ATH " + fmtUsd(regime.all_time_high) },
+      { label: "SMA 200", value: regime.sma["200"] !== null ? fmtUsd(regime.sma["200"]) : "—", sub: "" },
+      { label: "SMA 350", value: regime.sma["350"] !== null ? fmtUsd(regime.sma["350"]) : "—", sub: "" },
+      { label: "Regime", value: regime.label, sub: "current position, not a prediction" },
+      { label: "Rainbow band", value: rainbow ? rainbow.current_band_label : "—", sub: "where price sits vs. the fitted trend" },
+    ];
+    for (const t of tiles) {
+      grid.appendChild(el("div", { class: "kpi-tile" }, [
+        el("div", { class: "label" }, t.label),
+        el("div", { class: "value" }, String(t.value)),
+        t.sub ? el("div", { class: "sub" }, t.sub) : null,
+      ]));
+    }
+  }
+
+  function renderBtcRainbow() {
+    const rainbow = (DATA.btc_indicators || {}).rainbow;
+    const box = document.getElementById("rainbow-chart").parentElement;
+    const legend = document.getElementById("rainbow-legend");
+    legend.innerHTML = "";
+    if (!rainbow) {
+      box.innerHTML = '<div class="empty-state">not enough BTC price history cached yet</div>';
+      return;
+    }
+
+    // fit_line/band_edges are downsampled (weekly) server-side while price_series
+    // stays daily, so datasets have different lengths -- explicit {x, y} points
+    // (x = ordinal day number, not a date string) let each dataset position
+    // itself correctly regardless of length, and give Chart.js a real numeric
+    // axis so zoom/pan behaves properly (a "category" axis with thousands of
+    // categories made zoom collapse to a single visible tick).
+    const asPoints = (series) => series.map((p) => ({ x: dateToOrdinal(p.date), y: p.value }));
+    const datasets = [];
+    const lastEdge = rainbow.band_edges.length - 1;
+    for (let i = 0; i < lastEdge; i++) {
+      datasets.push({
+        label: rainbow.band_labels[i],
+        data: asPoints(rainbow.band_edges[i]),
+        borderWidth: 0,
+        pointRadius: 0,
+        backgroundColor: RAINBOW_COLORS[i] + "55",
+        fill: i + 1,
+        tension: 0.1,
+      });
+    }
+    datasets.push({
+      label: "upper band edge",
+      data: asPoints(rainbow.band_edges[lastEdge]),
+      borderWidth: 0,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.1,
+    });
+    datasets.push({
+      label: "fit trend",
+      data: asPoints(rainbow.fit_line),
+      borderColor: cssVar("--text-muted"),
+      borderDash: [4, 4],
+      borderWidth: 1,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.1,
+    });
+    datasets.push({
+      label: "BTC price",
+      data: asPoints(rainbow.price_series),
+      borderColor: cssVar("--text-primary"),
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.1,
+    });
+
+    for (let i = 0; i < rainbow.band_labels.length; i++) {
+      legend.appendChild(el("div", { class: "item" }, [
+        el("span", { class: "swatch", style: `background:${RAINBOW_COLORS[i]}` }),
+        rainbow.band_labels[i],
+      ]));
+    }
+
+    const ctx = document.getElementById("rainbow-chart").getContext("2d");
+    if (rainbowChart) rainbowChart.destroy();
+    rainbowChart = new Chart(ctx, {
+      type: "line",
+      data: { datasets },
+      options: chartBaseOptions({
+        yTitle: "price (USD, log scale)",
+        showLegend: false,
+        yType: "logarithmic",
+        xTicksLimit: 10,
+        xDateFormat: true,
+        zoomPan: true,
+      }),
+    });
+  }
+
+  function renderBtcFearGreed() {
+    const fg = (DATA.btc_indicators || {}).fear_greed;
+    const currentBox = document.getElementById("feargreed-current");
+    currentBox.innerHTML = "";
+    if (!fg) {
+      currentBox.appendChild(el("div", { class: "empty-state" }, "no data"));
+      return;
+    }
+    currentBox.appendChild(el("div", { class: "benchmark-hero" }, [
+      el("span", { class: "alpha" }, String(fg.current.value)),
+      el("span", { class: "alpha-label" }, `${fg.current.classification} -- as of ${fg.current.date}`),
+    ]));
+
+    const recent = fg.history.slice(-180);
+    const ctx = document.getElementById("feargreed-chart").getContext("2d");
+    if (feargreedChart) feargreedChart.destroy();
+    feargreedChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Fear & Greed",
+          data: recent.map((p) => ({ x: dateToOrdinal(p.date), y: p.value })),
+          borderColor: cssVar("--cat-4"),
+          backgroundColor: cssVar("--cat-4"),
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+        }],
+      },
+      options: chartBaseOptions({ yMin: 0, yMax: 100, showLegend: false, xTicksLimit: 10, xDateFormat: true, zoomPan: true }),
+    });
+  }
+
+  function renderBtcDominance() {
+    const dom = (DATA.btc_indicators || {}).dominance || { history: [] };
+    const currentBox = document.getElementById("dominance-current");
+    currentBox.innerHTML = "";
+    const box = document.getElementById("dominance-chart").parentElement;
+    if (!dom.history || dom.history.length === 0) {
+      currentBox.appendChild(el("div", { class: "empty-state" }, "no data yet -- this builds up one point per day"));
+      box.innerHTML = '<div class="empty-state">no data yet -- this builds up one point per day</div>';
+      return;
+    }
+    const latest = dom.history[dom.history.length - 1];
+    currentBox.appendChild(el("div", { class: "benchmark-hero" }, [
+      el("span", { class: "alpha" }, latest.btc_dominance_pct !== null ? latest.btc_dominance_pct.toFixed(1) + "%" : "—"),
+      el("span", { class: "alpha-label" }, `BTC dominance -- as of ${latest.date} (${dom.history.length} day${dom.history.length === 1 ? "" : "s"} of history so far)`),
+    ]));
+    if (dom.history.length === 1) {
+      box.innerHTML = '<div class="empty-state">only 1 day recorded so far -- a line needs at least 2 points; check back tomorrow</div>';
+      return;
+    }
+    const ctx = document.getElementById("dominance-chart").getContext("2d");
+    if (dominanceChart) dominanceChart.destroy();
+    dominanceChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "BTC dominance %",
+          data: dom.history.map((p) => ({ x: dateToOrdinal(p.date), y: p.btc_dominance_pct })),
+          borderColor: cssVar("--cat-1"),
+          backgroundColor: cssVar("--cat-1"),
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+        }],
+      },
+      options: chartBaseOptions({ yTitle: "% dominance", showLegend: false, xTicksLimit: 10, xDateFormat: true, zoomPan: true }),
+    });
+  }
+
+  function renderBtcStablecoin() {
+    const trend = (DATA.btc_indicators || {}).stablecoin_supply || [];
+    const box = document.getElementById("stablecoin-chart").parentElement;
+    if (trend.length === 0) {
+      box.innerHTML = '<div class="empty-state">no data</div>';
+      return;
+    }
+    const ctx = document.getElementById("stablecoin-chart").getContext("2d");
+    if (stablecoinChart) stablecoinChart.destroy();
+    stablecoinChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Stablecoin market cap",
+          data: trend.map((p) => ({ x: dateToOrdinal(p.date), y: p.total_market_cap_usd })),
+          borderColor: cssVar("--cat-4"),
+          backgroundColor: cssVar("--cat-4"),
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.15,
+        }],
+      },
+      options: chartBaseOptions({ yTitle: "USD", showLegend: false, xTicksLimit: 10, xDateFormat: true, zoomPan: true }),
+    });
+  }
+
+  // ---- altcoin season index ----
+
+  let altcoinSeasonChart = null;
+
+  function renderAltcoinSeason() {
+    const asi = DATA.altcoin_season_index || { history: [], current: null };
+    const currentBox = document.getElementById("altcoin-season-current");
+    currentBox.innerHTML = "";
+    if (!asi.current || asi.current.pct_beating_btc === null) {
+      currentBox.appendChild(el("div", { class: "empty-state" }, "not enough history yet (needs 90+ days)"));
+    } else {
+      const pct = asi.current.pct_beating_btc;
+      const phase = pct >= 75 ? "Altcoin Season" : pct <= 25 ? "Bitcoin Season" : "Neutral";
+      currentBox.appendChild(el("div", { class: "benchmark-hero" }, [
+        el("span", { class: "alpha" }, pct.toFixed(0) + "%"),
+        el("span", { class: "alpha-label" }, `${phase} -- as of ${asi.current.date} (n=${asi.current.n})`),
+      ]));
+    }
+
+    const points = (asi.history || []).filter((h) => h.pct_beating_btc !== null);
+    const box = document.getElementById("altcoin-season-chart").parentElement;
+    if (points.length === 0) {
+      box.innerHTML = '<div class="empty-state">not enough history yet</div>';
+      return;
+    }
+    const ctx = document.getElementById("altcoin-season-chart").getContext("2d");
+    if (altcoinSeasonChart) altcoinSeasonChart.destroy();
+    altcoinSeasonChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "% beating BTC (90d)",
+          data: points.map((p) => ({ x: dateToOrdinal(p.date), y: p.pct_beating_btc })),
+          borderColor: cssVar("--cat-3"),
+          backgroundColor: cssVar("--cat-3"),
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.15,
+        }],
+      },
+      options: chartBaseOptions({ yMin: 0, yMax: 100, showLegend: false, xTicksLimit: 10, xDateFormat: true, zoomPan: true }),
+    });
+  }
+
+  // ---- compare two coins ----
+
+  let compareChart = null;
+
+  function mostRecentTenure(coinId) {
+    const series = (DATA.coin_series && DATA.coin_series[coinId]) || null;
+    if (!series || !series.tenures || series.tenures.length === 0) return null;
+    return series.tenures[series.tenures.length - 1];
+  }
+
+  function compareSeriesFor(coinId) {
+    const tenure = mostRecentTenure(coinId);
+    const series = (DATA.coin_series && DATA.coin_series[coinId]) || null;
+    if (!tenure || !series) return [];
+    const entryTime = new Date(tenure.entry_date).getTime();
+    return series.price_series
+      .filter((p) => p.date >= tenure.entry_date)
+      .map((p) => ({
+        x: Math.round((new Date(p.date).getTime() - entryTime) / 86400000),
+        y: ((p.price - tenure.entry_price) / tenure.entry_price) * 100,
+      }));
+  }
+
+  function renderCompareChart() {
+    const idA = document.getElementById("compare-coin-a").value;
+    const idB = document.getElementById("compare-coin-b").value;
+    const coinA = (DATA.coins || []).find((c) => c.coin_id === idA);
+    const coinB = (DATA.coins || []).find((c) => c.coin_id === idB);
+    const box = document.getElementById("compare-chart").parentElement;
+    if (!idA || !idB) {
+      box.innerHTML = '<div class="empty-state">pick two coins</div>';
+      return;
+    }
+    const ctx = document.getElementById("compare-chart").getContext("2d");
+    if (compareChart) compareChart.destroy();
+    compareChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [
+          {
+            label: coinA ? coinA.symbol : idA,
+            data: compareSeriesFor(idA),
+            borderColor: cssVar("--cat-1"),
+            backgroundColor: cssVar("--cat-1"),
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.1,
+          },
+          {
+            label: coinB ? coinB.symbol : idB,
+            data: compareSeriesFor(idB),
+            borderColor: cssVar("--cat-2"),
+            backgroundColor: cssVar("--cat-2"),
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.1,
+          },
+        ],
+      },
+      options: chartBaseOptions({
+        xTitle: "days since entry",
+        yTitle: "% return since entry",
+        showLegend: true,
+      }),
+    });
+  }
+
+  function setupCompareView() {
+    const coins = (DATA.coins || []).slice().sort((a, b) => a.symbol.localeCompare(b.symbol));
+    const selA = document.getElementById("compare-coin-a");
+    const selB = document.getElementById("compare-coin-b");
+    for (const sel of [selA, selB]) {
+      sel.innerHTML = "";
+      for (const c of coins) {
+        sel.appendChild(el("option", { value: c.coin_id }, `${c.symbol} -- ${c.name}`));
+      }
+    }
+    if (coins.length > 1) {
+      selA.value = coins[0].coin_id;
+      selB.value = coins[1].coin_id;
+    }
+    selA.addEventListener("change", renderCompareChart);
+    selB.addEventListener("change", renderCompareChart);
+    renderCompareChart();
+  }
+
   // ---- boot ----
 
   function main() {
@@ -661,6 +1047,7 @@
     setupTabs();
     setupCoinsFilters();
     setupCoinModal();
+    setupZoomResetButtons();
     if (!DATA) return;
 
     document.getElementById("generated-at").textContent = "generated: " + (DATA.meta.generated_at || "?");
@@ -675,6 +1062,13 @@
     renderSurvival();
     renderCoinsTable();
     renderTimeline();
+    renderBtcRegime();
+    renderBtcRainbow();
+    renderBtcFearGreed();
+    renderBtcDominance();
+    renderBtcStablecoin();
+    renderAltcoinSeason();
+    setupCompareView();
   }
 
   document.addEventListener("DOMContentLoaded", main);

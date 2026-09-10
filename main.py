@@ -7,7 +7,7 @@ import argparse
 import logging
 import sys
 
-from src import analytics, db, export, returns, tracker
+from src import analytics, btc_indicators, db, export, returns, tracker
 from src.coingecko import CoinGeckoClient, CoinGeckoError
 from src.config import DB_PATH, load_extra_seed_coin_ids
 
@@ -77,6 +77,22 @@ def cmd_snapshot(args: argparse.Namespace) -> None:
         conn.close()
 
 
+def cmd_bitcoin(args: argparse.Namespace) -> None:
+    conn = db.get_connection()
+    client = CoinGeckoClient()
+    try:
+        result = btc_indicators.fetch_and_cache(conn, client)
+        print(f"BTC price history: {result['btc_price_rows_upserted']} rows upserted "
+              f"(Yahoo Finance, since CoinGecko's free tier caps history at 365 days).")
+        print(f"Global snapshot recorded: {result['global_snapshot_recorded']}.")
+        print(f"Fear & Greed history: {result['fear_greed_rows_upserted']} rows upserted.")
+    except CoinGeckoError as exc:
+        logger.error("BTC indicators fetch failed: %s", exc)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+
 def cmd_returns(args: argparse.Namespace) -> None:
     conn = db.get_connection()
     client = CoinGeckoClient()
@@ -120,6 +136,7 @@ def cmd_export(args: argparse.Namespace) -> None:
 def cmd_run(args: argparse.Namespace) -> None:
     cmd_snapshot(args)
     cmd_returns(args)
+    cmd_bitcoin(args)
     cmd_analyze(args)
 
 
@@ -198,6 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("snapshot", help="capture today's top50").set_defaults(func=cmd_snapshot)
     sub.add_parser("returns", help="compute pending returns").set_defaults(func=cmd_returns)
+    sub.add_parser("bitcoin", help="fetch/update BTC position indicators (rainbow, regime, dominance, fear & greed)").set_defaults(func=cmd_bitcoin)
     sub.add_parser("analyze", help="generate output/analysis.json").set_defaults(func=cmd_analyze)
 
     p = sub.add_parser("export", help="export data table")

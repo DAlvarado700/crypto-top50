@@ -181,6 +181,15 @@ class CoinGeckoClient:
             logger.warning("market_chart/range failed for %s: %s", coin_id, exc)
             return {"prices": [], "market_caps": [], "total_volumes": []}
 
+    def get_global(self) -> dict | None:
+        """Current global market snapshot (total market cap, BTC dominance) via /global.
+        No history is available on the free tier -- this is a point-in-time read only."""
+        try:
+            return self._get("/global")
+        except CoinGeckoError as exc:
+            logger.warning("get_global failed: %s", exc)
+            return None
+
     def get_price_on_date(self, coin_id: str, on_date: date, vs_currency: str = "usd") -> float | None:
         """Historical price on a specific date via /coins/{id}/history (dd-mm-yyyy)."""
         date_str = on_date.strftime("%d-%m-%Y")

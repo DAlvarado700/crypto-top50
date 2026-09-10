@@ -134,6 +134,29 @@ nav.tabs button.active {
   font-weight: 700;
 }
 
+.card-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-head-row h2 { margin: 0 0 12px; }
+
+.chart-tool-btn {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 9px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.chart-tool-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
